@@ -7,6 +7,7 @@ type service struct {
 	stop  func(ctx context.Context) error
 }
 
+//nolint:revive // function is used to pass directly to Orchestrator's Service function
 func ToService(start func() error, stop func(ctx context.Context) error) *service {
 	return &service{
 		start: start,
