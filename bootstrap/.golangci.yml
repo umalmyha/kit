@@ -163,7 +163,7 @@ linters-settings:
   nolintlint:
     # Exclude following linters from requiring an explanation.
     # Default: []
-    allow-no-explanation: [ lll ]
+    allow-no-explanation: []
     # Enable to require an explanation of nonzero length after each nolint directive.
     # Default: false
     require-explanation: true
@@ -322,6 +322,7 @@ linters-settings:
         arguments:
           - "checkPrivateReceivers"
           - "disableStutteringCheck"
+          - "sayRepetitiveInsteadOfStutters"
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#file-header
       - name: file-header
         severity: warning
@@ -588,7 +589,7 @@ linters:
     #- exhaustruct # [highly recommend to enable] checks if all structure fields are initialized
     #- ginkgolinter # [if ginkgo/gomega is used] enforces standards of using ginkgo and gomega
     #- gosmopolitan # [if i18n is used] reports certain i18n/l10n anti-patterns in your Go codebase
-    #- maintidx # measures the maintainability index of each function
+    #- maintidx # [there are already dozens of cyclomatic and cognitive linters] measures the maintainability index of each function
     #- nonamedreturns # [most likely should not be enabled, since named returns are required sometimes] reports all named returns
     #- wrapcheck # [as for me not always must be wrapped] checks that errors returned from external packages are wrapped
     #- gomodguard # [raise warning with 1.21.0] allow and block lists linter for direct Go module dependencies. This is different from depguard where there are different block types for example version constraints and module recommendations
@@ -600,6 +601,11 @@ issues:
   # Set to 0 to disable.
   # Default: 3
   max-same-issues: 3
+  # Independently of option `exclude` we use default exclude patterns,
+  # it can be disabled by this option.
+  # To list all excluded by default patterns execute `golangci-lint run --help`.
+  # Default: true.
+  exclude-use-default: false
 
   exclude-rules:
     - path: "_test\\.go"

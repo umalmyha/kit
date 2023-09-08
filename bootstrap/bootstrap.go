@@ -5,25 +5,34 @@ import (
 	"errors"
 	"os"
 	"os/signal"
-
-	"golang.org/x/sync/errgroup"
+	"sync"
 )
 
+// ErrShutdownTimeout is raised when server failed to stop services within
+// timeout provided in Orchestrator configuration
 var ErrShutdownTimeout = errors.New("shutdown timeout")
 
+// Job represents function for handling any endless or running once process.
+// Passed context will be cancelled as soon as interrupt signal received
 type Job func(ctx context.Context) error
 
+// Service represents any process which is controlled by start and stop.
+// On Orchestrator`s startup it tries to call Start function of each Service and
+// on receiving interrupt signal Stop function of each service is called forcing
+// service to be stopped within startup provided in configuration.
 type Service interface {
 	Start() error
 	Stop(ctx context.Context) error
 }
 
+// Orchestrator can collect multiple Job and Service instances and handle theirs lifecycle
 type Orchestrator struct {
 	services []Service
 	jobs     []Job
 	cfg      Config
 }
 
+// New builds new Orchestrator with provided options
 func New(opts ...ConfigFunc) *Orchestrator {
 	cfg := Config{}
 	for _, opt := range opts {
@@ -41,28 +50,56 @@ func New(opts ...ConfigFunc) *Orchestrator {
 	}
 }
 
+// Service accepts services for their lifecycle to be handled
 func (o *Orchestrator) Service(services ...Service) *Orchestrator {
 	o.services = append(o.services, services...)
 	return o
 }
 
+// Job accepts jobs for their lifecycle to be handled
 func (o *Orchestrator) Job(jobs ...Job) *Orchestrator {
 	o.jobs = append(o.jobs, jobs...)
 	return o
 }
 
-func (o *Orchestrator) Start() error {
+// Serve starts Service(s) and Job(s) lifecycle
+func (o *Orchestrator) Serve() error {
+	// we create context to track interrupt signals
 	notifyCtx, stop := signal.NotifyContext(context.Background(), o.cfg.interruptSignals...)
 	defer stop()
 
-	grp, grpCtx := errgroup.WithContext(notifyCtx)
+	// shutdown context must be passed immediately to goroutines, so services and jobs can be
+	// stopped after some timeout
+	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
+	defer shutdownCancel()
+
+	//grp, grpCtx := errgroup.WithContext(notifyCtx)
+
+	var (
+		wg   sync.WaitGroup
+		once sync.Once
+	)
+
+	errOnce := func(e error) {
+		once.Do(func() {
+			stop()
+		})
+	}
 
 	for i := range o.jobs {
-		if job := o.jobs[i]; job != nil {
-			grp.Go(func() error {
-				return job(grpCtx)
-			})
+		job := o.jobs[i]
+		if job == nil {
+			continue
 		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			if err := job(shutdownCtx); err != nil {
+				errOnce(err)
+			}
+		}()
 	}
 
 	for i := range o.services {
@@ -71,35 +108,17 @@ func (o *Orchestrator) Start() error {
 			continue
 		}
 
-		errCh := make(chan error, 1)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 
-		grp.Go(func() error {
+			go func() {
+
+			}()
+
 			if err := svc.Start(); err != nil {
-				errCh <- err
+
 			}
-			return nil
-		})
-
-		grp.Go(func() error {
-			select {
-			case <-grpCtx.Done():
-			case err := <-errCh:
-				return err
-			}
-
-			shutdownCtx, shutdownCancel := o.shutdownContext()
-			defer shutdownCancel()
-
-			return svc.Stop(shutdownCtx)
-		})
+		}()
 	}
-
-	return grp.Wait()
-}
-
-func (o *Orchestrator) shutdownContext() (context.Context, context.CancelFunc) {
-	if o.cfg.shutdownTimeout > 0 {
-		return context.WithTimeoutCause(context.Background(), o.cfg.shutdownTimeout, ErrShutdownTimeout)
-	}
-	return context.WithCancel(context.Background())
 }
