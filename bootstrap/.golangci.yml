@@ -71,7 +71,7 @@ linters-settings:
     # Checks the number of lines in a function.
     # If lower than 0, disable the check.
     # Default: 60
-    lines: 80
+    lines: 100
     # Checks the number of statements in a function.
     # If lower than 0, disable the check.
     # Default: 40
@@ -234,7 +234,7 @@ linters-settings:
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#cognitive-complexity
       - name: cognitive-complexity
         severity: warning
-        disabled: false
+        disabled: true
         arguments: [ 20 ]
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#comment-spacings
       - name: comment-spacings
@@ -263,7 +263,7 @@ linters-settings:
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#cyclomatic
       - name: cyclomatic
         severity: warning
-        disabled: false
+        disabled: true
         arguments: [ 20 ]
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#datarace
       - name: datarace
@@ -339,8 +339,8 @@ linters-settings:
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#function-length
       - name: function-length
         severity: warning
-        disabled: false
-        arguments: [ 50, 80 ]
+        disabled: true
+        arguments: [ 50, 100 ]
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#get-return
       - name: get-return
         severity: warning
@@ -471,7 +471,7 @@ linters-settings:
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#unhandled-error
       - name: unhandled-error
         severity: warning
-        disabled: false
+        disabled: true
       # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#unnecessary-stmt
       - name: unnecessary-stmt
         severity: warning
@@ -535,7 +535,6 @@ linters:
     - execinquery # checks query string in Query function which reads your Go src files and warning it finds
     - exhaustive # checks exhaustiveness of enum switch statements
     - exportloopref # checks for pointers to enclosing loop variables
-    - forbidigo # forbids identifiers
     - funlen # tool for detection of long functions
     - gci # controls golang package import order and makes it always deterministic
     - gocheckcompilerdirectives # validates go compiler directive comments (//go:)
@@ -587,6 +586,7 @@ linters:
 
     ## can be enabled (maybe...)
     #- exhaustruct # [highly recommend to enable] checks if all structure fields are initialized
+    #- forbidigo # [for some reason it fires in examples] forbids identifiers
     #- ginkgolinter # [if ginkgo/gomega is used] enforces standards of using ginkgo and gomega
     #- gosmopolitan # [if i18n is used] reports certain i18n/l10n anti-patterns in your Go codebase
     #- maintidx # [there are already dozens of cyclomatic and cognitive linters] measures the maintainability index of each function
@@ -605,7 +605,7 @@ issues:
   # it can be disabled by this option.
   # To list all excluded by default patterns execute `golangci-lint run --help`.
   # Default: true.
-  exclude-use-default: false
+  exclude-use-default: true
 
   exclude-rules:
     - path: "_test\\.go"

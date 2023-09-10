@@ -62,30 +62,32 @@ func (o *Orchestrator) Job(jobs ...Job) *Orchestrator {
 	return o
 }
 
-// Serve starts Service(s) and Job(s) lifecycle
-func (o *Orchestrator) Serve() error {
+// Serve starts Service(s) and Job(s) lifecycle. The first error is returned if it occurs on startup or shutdown
+//
+//nolint:cyclop // a lot of variables must be caught within goroutines
+func (o *Orchestrator) Serve() (serveErr error) {
 	// we create context to track interrupt signals
 	notifyCtx, stop := signal.NotifyContext(context.Background(), o.cfg.interruptSignals...)
 	defer stop()
 
-	// shutdown context must be passed immediately to goroutines, so services and jobs can be
-	// stopped after some timeout
-	shutdownCtx, shutdownCancel := context.WithCancel(context.Background())
-	defer shutdownCancel()
-
-	//grp, grpCtx := errgroup.WithContext(notifyCtx)
+	// stop context must be passed immediately to service, so it can be cancelled after shutdown timeout
+	stopCtx, stopCancel := context.WithCancel(context.Background())
+	defer stopCancel()
 
 	var (
 		wg   sync.WaitGroup
 		once sync.Once
 	)
 
-	errOnce := func(e error) {
+	// once set error and mark context as done, so setup shutdown process for already started services and jobs
+	errOnce := func(err error) {
 		once.Do(func() {
+			serveErr = err
 			stop()
 		})
 	}
 
+	// each job gets shutdown context immediately
 	for i := range o.jobs {
 		job := o.jobs[i]
 		if job == nil {
@@ -96,29 +98,75 @@ func (o *Orchestrator) Serve() error {
 		go func() {
 			defer wg.Done()
 
-			if err := job(shutdownCtx); err != nil {
+			// job must be running until interrupt signal is received
+			if err := job(notifyCtx); err != nil {
 				errOnce(err)
 			}
 		}()
 	}
 
+	// each service has to track Start and Stop process in separate goroutine
 	for i := range o.services {
 		svc := o.services[i]
 		if svc == nil {
 			continue
 		}
 
+		errCh := make(chan error, 1)
+
+		go func() {
+			if err := svc.Start(); err != nil {
+				// we don't call errOnce here, but pass further to Stop goroutine, so it can decide to
+				// call or not Stop function of services
+				errCh <- err
+			}
+		}()
+
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			go func() {
+			select {
+			case <-notifyCtx.Done():
+			case err := <-errCh:
+				// error came from Start goroutine, so we start shutdown process for other services and jobs
+				// and set an error to return
+				errOnce(err)
+				return
+			}
 
-			}()
-
-			if err := svc.Start(); err != nil {
-
+			if err := svc.Stop(stopCtx); err != nil {
+				errOnce(err)
 			}
 		}()
 	}
+
+	// wait for interrupt signal or for the first startup error
+	<-notifyCtx.Done()
+
+	// we are waiting for jobs and services to stop within specified timeout if it was
+	// specified in config
+	done := make(chan struct{}, 1)
+	shutdownCtx, shutdownCancel := o.shutdownContext()
+	defer shutdownCancel()
+
+	go func() {
+		wg.Wait()
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-done:
+	case <-shutdownCtx.Done():
+		errOnce(ErrShutdownTimeout)
+	}
+
+	return serveErr
+}
+
+func (o *Orchestrator) shutdownContext() (context.Context, context.CancelFunc) {
+	if o.cfg.shutdownTimeout > 0 {
+		return context.WithTimeoutCause(context.Background(), o.cfg.shutdownTimeout, ErrShutdownTimeout)
+	}
+	return context.WithCancel(context.Background())
 }
