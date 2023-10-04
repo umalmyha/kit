@@ -5,7 +5,11 @@ import "github.com/labstack/echo/v4"
 func New() {
 	e := echo.New()
 
+	e.JSONSerializer
+
 	a := func(c echo.Context) error {
 		c.Cookie()
+		c.JSON()
+		c.NoContent()
 	}
 }
