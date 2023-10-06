@@ -9,7 +9,6 @@ func New() {
 
 	a := func(c echo.Context) error {
 		c.Cookie()
-		c.JSON()
-		c.NoContent()
+		c.HTML()
 	}
 }
