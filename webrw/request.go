@@ -6,17 +6,18 @@ import (
 )
 
 type Request struct {
-	req         *http.Request
-	unmarshaler JSONUnmarshaler
+	req *http.Request
+	ju  JSONUnmarshaler
+	xu  XMLUnmarshaler
 }
 
 func (r *Request) ContentType() string {
-	typ := r.Headers().Get(HeaderContentType)
-	parts := strings.SplitN(typ, ";", 2)
-	if len(parts) > 0 {
-		return strings.TrimSpace(parts[0])
+	typ := r.req.Header.Get(HeaderContentType)
+	idx := strings.IndexByte(typ, ';')
+	if idx == -1 {
+		return typ
 	}
-	return ""
+	return typ[:idx]
 }
 
 func (r *Request) Headers() http.Header {
@@ -34,13 +35,22 @@ func (r *Request) Cookie(name string) (*http.Cookie, error) {
 	return r.req.Cookie(name)
 }
 
-func (r *Request) Request() *http.Request {
-	return r.req
+func (r *Request) Body(to any) error {
+	switch r.ContentType() {
+	case MIMEApplicationJSON:
+		return r.JSON(to)
+	case MIMEApplicationXML:
+		return r.XML(to)
+	case MIMEApplicationFormURLEncoded, MIMEMultipartFormData:
+	default:
+		return ErrUnsupportedMediaType
+	}
 }
 
 func (r *Request) JSON(to any) error {
-	if r.ContentType() == MIMEApplicationJSON {
+	return r.ju.Unmarshal(r.req.Body, to)
+}
 
-	}
-	return r.unmarshaler.Unmarshal(r.req.Body, to)
+func (r *Request) XML(to any) error {
+	return r.xu.Unmarshal(r.req.Body, to)
 }
